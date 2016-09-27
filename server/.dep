@@ -1,0 +1,20 @@
+server.o: server.cpp ..//install/libevent/include/event2/event.h \
+ ..//install/libevent/include/event2/event-config.h \
+ ..//install/libevent/include/event2/util.h \
+ ..//install/libevent/include/event2/listener.h \
+ ..//install/libevent/include/event2/bufferevent.h \
+ ..//install/libevent/include/event2/thread.h \
+ ..//install/libevent/include/event.h \
+ ..//install/libevent/include/evutil.h \
+ ..//install/libevent/include/event2/event_struct.h \
+ ..//install/libevent/include/event2/keyvalq_struct.h \
+ ..//install/libevent/include/event2/event_compat.h \
+ ..//install/libevent/include/event2/buffer.h \
+ ..//install/libevent/include/event2/buffer_compat.h \
+ ..//install/libevent/include/event2/bufferevent_struct.h \
+ ..//install/libevent/include/event2/bufferevent_compat.h \
+ ..//install/libevent/include/event2/tag.h \
+ ..//install/libevent/include/event2/tag_compat.h \
+ ..//install/lua/include/lua.h ..//install/lua/include/luaconf.h \
+ ..//install/lua/include/lauxlib.h ..//install/lua/include/lua.h \
+ ..//install/lua/include/lualib.h
