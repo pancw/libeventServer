@@ -28,6 +28,7 @@ void Lua_Tick();
 void Lua_HandleEvent(unsigned vfd, const char* msg, size_t len);
 void Lua_HandleConnect(unsigned vfd);
 void Lua_HandleDisConnect(unsigned vfd);
+void Lua_HandleShutDown();
 
 union cb_user_data {
 	unsigned int vfd;
@@ -106,30 +107,18 @@ void eraseClient(int vfd)
 }
 	
 
-int cnt = 1;
 static void
 signal_cb(evutil_socket_t fd, short event, void *arg)
 {
 	struct event *signal = (struct event *)arg;
-
 	printf("%s: got signal %d\n", __func__, EVENT_SIGNAL(signal));
 
-	for (auto it = AllClients.begin(); it!=AllClients.end(); it++){
-		const char msg[] = "hello";
-		it->second->do_write(msg, 5);
-	}
-
-	cnt ++;
-	if (cnt <= 2){
-		return;
-	}
-
+	Lua_HandleShutDown();
 	for (auto it = AllClients.begin(); it!=AllClients.end(); it++){
 		bufferevent_free(it->second->get_bev());    
 	}
 	event_del(signal);
 	exit(101);
-	//TODO lua call
 }
 
 static void
@@ -299,6 +288,18 @@ void Lua_HandleDisConnect(unsigned vfd)
 	lua_pushinteger(L, vfd); 
 
 	int result = lua_pcall(L, 1, 0, -1 - 2);
+	if (result) {
+		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
+	}
+	lua_settop(L, 0);
+}
+
+void Lua_HandleShutDown()
+{
+	lua_pushcclosure(L, error_fun, 0);
+	lua_getglobal(L, "HandleShutDown");
+
+	int result = lua_pcall(L, 0, 0, - 2);
 	if (result) {
 		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
 	}

@@ -1,10 +1,15 @@
 package.path = package.path .. ';./src/msgpack/?.lua'
 
-local msgpack = require "MessagePack"
-local Net = require "NetLib"
+msgpack = require "MessagePack"
+Net = require "NetLib"
+
+require "src/base/import"
+require "src/base/lua_class"
+require "src/base/res_mgr"
+
+local client = Import("src/client")
+
 mongo = require "mongo"
-
-
 db = mongo.client { host = "localhost", port = 1238 }
 local r = db:runCommand "listDatabases"
 for k,v in ipairs(r.databases) do
@@ -12,11 +17,14 @@ for k,v in ipairs(r.databases) do
 end
 
 local clients = {}
+function getClientByVfd(vfd)
+	return clients[vfd]
+end
 
 function Tick ()
 	--print("tick...")
-	for vfd, _ in pairs(clients) do
-		Net.send(vfd, msgpack.pack("A long test msg.[aaasdlkaslkaslkjklasjklsklajasdklasasdjkljklsadkldsaklsadjklasdasdklasdjklasdjklxxx]"))
+	for vfd, c in pairs(clients) do
+		c.call.testFunc("abc")
 	end
 end
 
@@ -25,18 +33,21 @@ function HandleDisConnect(vfd)
 end
 
 function HandleConnect(vfd)
-	clients[vfd] = true
+	clients[vfd] = client.client(vfd)
 end
 
 function HandleEvent(vfd, msg)
-	print("HandleEvent:", vfd, msg)
 	local data = msgpack.unpack(msg)
-	if type(data) == "table" then
-		for k, v in pairs(data) do
-			print(k, v)	
-		end
+	local method_name = data[1]
+
+	local c = getClientByVfd(vfd)
+	if c and type(c[method_name]) == "function" then
+		c[method_name](c, table.unpack(data[2]))
+	else
+		print("call error.", vfd)
 	end
 end
 
-
-print("main.lua")
+function HandleShutDown()
+	print("lua shutdown.")
+end
