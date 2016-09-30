@@ -22,7 +22,6 @@ function getClientByVfd(vfd)
 end
 
 function Tick ()
-	--print("tick...")
 	for vfd, c in pairs(clients) do
 		c.call.testFunc("abc")
 	end

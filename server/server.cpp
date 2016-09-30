@@ -83,7 +83,7 @@ socket_read_cb(struct bufferevent *bev, void *arg)
 				size_t len = bufferevent_read(bev, client->read_msg, client_mgr::Client::header_length);    
 				if (len != client_mgr::Client::header_length)
 				{
-					printf("ERROR body kick client %d.\n", vfd);
+					printf("ERROR head kick client %d.\n", vfd);
 					client_mgr::eraseClient(vfd);
 					bufferevent_free(bev);    
 					return ;
