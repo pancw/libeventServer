@@ -1,5 +1,5 @@
 ROOT=.
-SRC=server.cpp
+SRC=server.cpp client.cpp luaService.cpp
 
 EXTLIB=$(ROOT)/../
 Flag= -g -std=c++0x -Wall -O0  -I $(EXTLIB)/install/libevent/include -I $(EXTLIB)/install/lua/include

@@ -23,12 +23,8 @@ extern "C" {
 #include "lauxlib.h"
 #include "lualib.h"
 }
-
-void Lua_Tick();
-void Lua_HandleEvent(unsigned vfd, const char* msg, size_t len);
-void Lua_HandleConnect(unsigned vfd);
-void Lua_HandleDisConnect(unsigned vfd);
-void Lua_HandleShutDown();
+#include "client.h"
+#include "luaService.h"
 
 union cb_user_data {
 	unsigned int vfd;
@@ -37,79 +33,9 @@ union cb_user_data {
 const unsigned char StatusReadHeader = 1;
 const unsigned char StatusReadbody = 2;
 
-class Client
-{
-public:
-
-	enum { header_length = 2 };
-	enum { max_body_length = 8192 }; // max:256*256+256
-
-	Client(int fd, unsigned int vfd, struct bufferevent *bev){
-		this->vfd = vfd;
-		this->fd = fd;
-		this->bev = bev;
-		this->m_readStatus = StatusReadHeader;
-		this->m_needByteCnt = header_length;
-	}
-	char write_msg[header_length + max_body_length];
-	char read_msg[header_length + max_body_length];
-	size_t m_needByteCnt;
-
-	int get_fd(){
-		return fd;
-	}
-
-	unsigned char get_readStatus(){
-		return this->m_readStatus;
-	}
-
-	void set_readStatus(unsigned char status){
-		this->m_readStatus = status;
-	}
-
-	bool do_write(const char* line, size_t size){
-		memcpy(this->write_msg + header_length, line, size);                                  
-		// encode header
-		this->write_msg[0] = (unsigned char)(size % 256);
-		this->write_msg[1] = (unsigned char)(size / 256);
-
-		bufferevent_write(this->bev, this->write_msg, header_length + size);    
-		return true;
-	}
-
-	struct bufferevent * get_bev(){
-		return this->bev;
-	}
-private:
-	struct bufferevent *bev;
-	unsigned int vfd;
-	int fd;
-	std::string ip;
-	unsigned char m_readStatus;
-};
-
-lua_State * L;
+//lua_State * L;
 unsigned int globalVfd = 1;
-std::map<unsigned int, Client*> AllClients;
-Client* queryClient(int vfd)
-{
-	std::map<unsigned int, Client*>::iterator it;
-	it = AllClients.find(vfd);
-	if (it == AllClients.end())
-		return NULL;
-	return it->second;
-}
-
-void eraseClient(int vfd)
-{
-	auto client = queryClient(vfd);
-	if (client)
-	{
-		AllClients.erase(vfd);
-		Lua_HandleDisConnect(vfd);
-		delete client;
-	}
-}
+//std::map<unsigned int, Client*> AllClients;
 
 static void
 signal_cb(evutil_socket_t fd, short event, void *arg)
@@ -117,8 +43,8 @@ signal_cb(evutil_socket_t fd, short event, void *arg)
 	struct event *signal = (struct event *)arg;
 	printf("%s: got signal %d\n", __func__, EVENT_SIGNAL(signal));
 
-	Lua_HandleShutDown();
-	for (auto it = AllClients.begin(); it!=AllClients.end(); it++){
+	lua_service::Lua_HandleShutDown();
+	for (auto it = client_mgr::AllClients.begin(); it!=client_mgr::AllClients.end(); it++){
 		bufferevent_free(it->second->get_bev());    
 	}
 	event_del(signal);
@@ -137,7 +63,7 @@ socket_event_cb(struct bufferevent *bev, short events, void *arg)
 	else if (events & BEV_EVENT_ERROR)    
 		printf("vfd:%d some other error\n", vfd);    
 
-	eraseClient(vfd);
+	client_mgr::eraseClient(vfd);
 	//这将自动close套接字和free读写缓冲区    
 	bufferevent_free(bev);    
 }    
@@ -149,7 +75,7 @@ socket_read_cb(struct bufferevent *bev, void *arg)
 	usd.p = arg;
 	unsigned int vfd = usd.vfd;
 
-	auto client = queryClient(vfd);
+	auto client = client_mgr::queryClient(vfd);
 	if (client){
 
 		size_t DataLen = EVBUFFER_LENGTH(EVBUFFER_INPUT(bev));
@@ -157,11 +83,11 @@ socket_read_cb(struct bufferevent *bev, void *arg)
 		{
 			if (client->get_readStatus() == StatusReadHeader){
 
-				size_t len = bufferevent_read(bev, client->read_msg, Client::header_length);    
-				if (len != Client::header_length)
+				size_t len = bufferevent_read(bev, client->read_msg, client_mgr::Client::header_length);    
+				if (len != client_mgr::Client::header_length)
 				{
 					printf("ERROR body kick client %d.\n", vfd);
-					eraseClient(vfd);
+					client_mgr::eraseClient(vfd);
 					bufferevent_free(bev);    
 					return ;
 				}
@@ -175,14 +101,14 @@ socket_read_cb(struct bufferevent *bev, void *arg)
 				size_t len = bufferevent_read(bev, client->read_msg, client->m_needByteCnt);    
 				if (len != client->m_needByteCnt){
 					printf("ERROR body kick client %d.\n", vfd);
-					eraseClient(vfd);
+					client_mgr::eraseClient(vfd);
 					bufferevent_free(bev);    
 					return ;
 				}
 
 				DataLen -= len;
 				client->set_readStatus(StatusReadHeader);
-				Lua_HandleEvent(vfd, client->read_msg, len);
+				lua_service::Lua_HandleEvent(vfd, client->read_msg, len);
 			}
 		}
 	} else{
@@ -205,8 +131,8 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 	struct bufferevent *bev =  bufferevent_socket_new(base, fd, BEV_OPT_CLOSE_ON_FREE);    
 
 	//TODO ip
-	Client *client = new Client(fd, vfd, bev);
-	AllClients.insert( std::make_pair(vfd, client) );
+	client_mgr::Client *client = new client_mgr::Client(fd, vfd, bev);
+	client_mgr::AllClients.insert( std::make_pair(vfd, client) );
 
 	cb_user_data usd;
 	usd.vfd = vfd;
@@ -214,7 +140,7 @@ listener_cb(struct evconnlistener *listener, evutil_socket_t fd,
 	bufferevent_setcb(bev, socket_read_cb, NULL, socket_event_cb, usd.p);    
 	bufferevent_enable(bev, EV_READ | EV_PERSIST);    
 
-	Lua_HandleConnect(vfd);
+	lua_service::Lua_HandleConnect(vfd);
 }    
 
 struct timeval lasttime;
@@ -231,139 +157,13 @@ timeout_cb(evutil_socket_t fd, short event, void *arg)
 	//printf("timeout_cb called at %d: %.3f seconds elapsed.\n", (int)newtime.tv_sec, elapsed);
 	lasttime = newtime;
 
-	Lua_Tick();
-}
-//call lua--------------------------------------------
-int error_fun(lua_State *state)
-{
-	std::string result;
-	const char *tmp = lua_tostring(state, -1); // error_msg
-	if (tmp) {
-		result = tmp;
-	}
-
-	lua_getglobal(state, "debug"); // error_msg, debug
-	lua_getfield(state, -1, "traceback"); // error_msg, debug, traceback
-	lua_call(state, 0, 1); // error_msg, traceback
-
-	tmp = lua_tostring(state, -1);
-	if (tmp) {
-		result = result + "\n" + tmp;
-	}
-
-	lua_pushstring(state, result.c_str()); // push result
-	return 1;
+	lua_service::Lua_Tick();
 }
 
-void Lua_Tick()
-{
-	lua_pushcclosure(L, error_fun, 0);
-	lua_getglobal(L, "Tick");
-	int result = lua_pcall(L, 0, 0, -2);
-	if (result) {
-		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
-	}
-	lua_settop(L, 0);
-}
-
-void Lua_HandleEvent(unsigned vfd, const char* msg, size_t len)
-{
-	lua_pushcclosure(L, error_fun, 0);
-	lua_getglobal(L, "HandleEvent");
-	lua_pushinteger(L, vfd); 
-	//lua_pushstring(L, msg);
-	lua_pushlstring(L, msg, len);
-
-	int result = lua_pcall(L, 2, 0, -2 - 2);
-	if (result) {
-		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
-	}
-	lua_settop(L, 0);
-}
-
-void Lua_HandleConnect(unsigned vfd)
-{
-	lua_pushcclosure(L, error_fun, 0);
-	lua_getglobal(L, "HandleConnect");
-	lua_pushinteger(L, vfd); 
-
-	int result = lua_pcall(L, 1, 0, -1 - 2);
-	if (result) {
-		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
-	}
-	lua_settop(L, 0);
-}
-
-void Lua_HandleDisConnect(unsigned vfd)
-{
-	lua_pushcclosure(L, error_fun, 0);
-	lua_getglobal(L, "HandleDisConnect");
-	lua_pushinteger(L, vfd); 
-
-	int result = lua_pcall(L, 1, 0, -1 - 2);
-	if (result) {
-		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
-	}
-	lua_settop(L, 0);
-}
-
-void Lua_HandleShutDown()
-{
-	lua_pushcclosure(L, error_fun, 0);
-	lua_getglobal(L, "HandleShutDown");
-
-	int result = lua_pcall(L, 0, 0, - 2);
-	if (result) {
-		printf("[lua-call(%d)]: %s\n", 1, lua_tostring(L, -1));
-	}
-	lua_settop(L, 0);
-}
-
-//lua call--------------------------------------------
-static int send (lua_State *state)
-{
-	size_t size;
-	unsigned vfd = luaL_checkinteger(state, 1);
-	const char* msg = luaL_checklstring(state, 2, &size);
-	auto client = queryClient(vfd);
-	if (client){
-		lua_pushboolean(state, client->do_write(msg, size));	
-	} else{
-		//TODO
-		lua_pushboolean(state, false);	
-	}
-	return 1;
-}
-const luaL_Reg net_functions[] = {
-	{ "send", send },
-	{ nullptr, nullptr }	
-};
-int luaopen_NetLib(lua_State* state)
-{
-	luaL_newlib(L, net_functions);
-	return 1;
-}
-static void InitLuaLib()
-{
-	L = luaL_newstate();  /* create state */
-	luaL_openlibs(L);
-	luaL_requiref(L,"NetLib", luaopen_NetLib, 1);
-
-	int err = luaL_loadfile(L, "src/main.lua");
-	if (err)
-	{
-		printf("%s\n", luaL_checkstring(L, -1));
-	}
-	int ret = lua_pcall(L, 0, 0, 0);
-	if (ret)
-	{
-		printf("%s\n", luaL_checkstring(L, -1));
-	}
-}
 	
 int main()    
 {    
-	InitLuaLib();
+	lua_service::InitLuaLib();
 
 	//evthread_use_pthreads();//enable threads    
 	struct event_base *base;
