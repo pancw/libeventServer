@@ -102,10 +102,14 @@ Client* queryClient(int vfd)
 
 void eraseClient(int vfd)
 {
-	AllClients.erase(vfd);
-	Lua_HandleDisConnect(vfd);
+	auto client = queryClient(vfd);
+	if (client)
+	{
+		AllClients.erase(vfd);
+		Lua_HandleDisConnect(vfd);
+		delete client;
+	}
 }
-	
 
 static void
 signal_cb(evutil_socket_t fd, short event, void *arg)
@@ -132,8 +136,8 @@ socket_event_cb(struct bufferevent *bev, short events, void *arg)
 		printf("vfd:%d connection closed\n", vfd);    
 	else if (events & BEV_EVENT_ERROR)    
 		printf("vfd:%d some other error\n", vfd);    
+
 	eraseClient(vfd);
-	
 	//这将自动close套接字和free读写缓冲区    
 	bufferevent_free(bev);    
 }    
@@ -154,24 +158,33 @@ socket_read_cb(struct bufferevent *bev, void *arg)
 			if (client->get_readStatus() == StatusReadHeader){
 
 				size_t len = bufferevent_read(bev, client->read_msg, Client::header_length);    
+				if (len != Client::header_length)
+				{
+					printf("ERROR body kick client %d.\n", vfd);
+					eraseClient(vfd);
+					bufferevent_free(bev);    
+					return ;
+				}
+
 				// decode header
 				client->m_needByteCnt = (unsigned char)client->read_msg[0] + (unsigned char)(client->read_msg[1])*256;
-				
 				DataLen -= len;
 				client->set_readStatus(StatusReadbody);
-				//printf("m_needByteCnt:%d\n", client->m_needByteCnt);
 			}
 			else if (client->get_readStatus() == StatusReadbody){
-
 				size_t len = bufferevent_read(bev, client->read_msg, client->m_needByteCnt);    
+				if (len != client->m_needByteCnt){
+					printf("ERROR body kick client %d.\n", vfd);
+					eraseClient(vfd);
+					bufferevent_free(bev);    
+					return ;
+				}
+
 				DataLen -= len;
 				client->set_readStatus(StatusReadHeader);
-
 				Lua_HandleEvent(vfd, client->read_msg, len);
 			}
 		}
-		//client->do_write(client->read_msg, client->m_needByteCnt);    
-
 	} else{
 		printf("Can not find client! vfd:%d\n", vfd);    
 		bufferevent_free(bev);    
