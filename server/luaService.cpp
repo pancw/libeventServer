@@ -48,7 +48,6 @@ namespace lua_service {
 	//call lua--------------------------------------------
 	int error_fun(lua_State *state)
 	{
-		auto client = client_mgr::queryClient(1);
 		std::string result;
 		const char *tmp = lua_tostring(state, -1); // error_msg
 		if (tmp) {

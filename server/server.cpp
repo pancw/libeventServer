@@ -32,10 +32,7 @@ union cb_user_data {
 };
 const unsigned char StatusReadHeader = 1;
 const unsigned char StatusReadbody = 2;
-
-//lua_State * L;
 unsigned int globalVfd = 1;
-//std::map<unsigned int, Client*> AllClients;
 
 static void
 signal_cb(evutil_socket_t fd, short event, void *arg)
