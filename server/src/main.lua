@@ -8,6 +8,7 @@ require "src/base/lua_class"
 require "src/base/res_mgr"
 
 local client = Import("src/client")
+local battle_room = Import("src/module/battle_room")
 
 mongo = require "mongo"
 db = mongo.client { host = "localhost", port = 1238 }
@@ -16,15 +17,13 @@ for k,v in ipairs(r.databases) do
 	print(v.name)
 end
 
-local clients = {}
+clients = {}
 function getClientByVfd(vfd)
 	return clients[vfd]
 end
 
 function Tick ()
-	for vfd, c in pairs(clients) do
-		c.call.testFunc("abc")
-	end
+	battle_room.tick()
 end
 
 function HandleDisConnect(vfd)

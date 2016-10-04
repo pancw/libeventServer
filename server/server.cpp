@@ -32,6 +32,7 @@ union cb_user_data {
 };
 const unsigned char StatusReadHeader = 1;
 const unsigned char StatusReadbody = 2;
+const float FPS = 60.0;
 unsigned int globalVfd = 1;
 
 static void
@@ -203,7 +204,8 @@ int main()
 	event_assign(&timeout, base, -1, EV_PERSIST, timeout_cb, (void*) &timeout);
 	evutil_timerclear(&tv);
 	tv.tv_sec = 0;
-	tv.tv_usec = 16.666 * 1000 * 60;
+	//tv.tv_usec = 16.666 * 1000 * 60;
+	tv.tv_usec = 1/FPS*1000*1000;
 	event_add(&timeout, &tv);
 	evutil_gettimeofday(&lasttime, NULL);
 	

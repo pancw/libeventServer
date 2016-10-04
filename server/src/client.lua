@@ -12,8 +12,17 @@ function client:_init(vfd)
 			return caller
 		end
 	})
+
+	--logic
+	self.x = 0
+	self.y = 0
+	self.v = 3
+	self.r = 'right'
+	self.press = false
 end
 
 function client:cmd(cmd)
-	print("cmd:", cmd)
+	for k, v in pairs(cmd) do
+		self[k] = v
+	end
 end
