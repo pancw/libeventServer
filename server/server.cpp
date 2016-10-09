@@ -32,7 +32,7 @@ union cb_user_data {
 };
 const unsigned char StatusReadHeader = 1;
 const unsigned char StatusReadbody = 2;
-const float FPS = 60.0;
+const float FPS = 30.0;
 unsigned int globalVfd = 1;
 
 static void

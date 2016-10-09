@@ -17,15 +17,15 @@ function client:_init(vfd)
 	self.x = 0
 	self.y = 0
 	self.v = 0
-	self.r = 'right'
+	self.r = 50
 	self.press = false
 	self.angle = 90
 	self.d = 1
 end
 
 function client:cmd(cmd)
-	for k, v in pairs(cmd) do
-		self[k] = v
+	if cmd.press ~= nil then
+		self.press = cmd.press
 	end
 	if cmd.press then
 		self.d = self.d * -1
